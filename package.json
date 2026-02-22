@@ -1,0 +1,60 @@
+{
+  "name": "checkindex",
+  "version": "0.1.0",
+  "description": "Google indexation verification service — checks if URLs/domains are indexed via Google Custom Search API with heuristic fallback",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "google",
+    "indexation",
+    "seo",
+    "check-index",
+    "search-console"
+  ],
+  "author": "eztharia",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.39.3",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yaml,yml}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

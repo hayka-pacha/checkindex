@@ -1,0 +1,8 @@
+#!/bin/sh
+# Check for secrets before committing
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --config .gitleaks.toml
+fi
+
+# Lint and format staged files
+pnpm exec lint-staged
