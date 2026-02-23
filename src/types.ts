@@ -1,9 +1,26 @@
 import { z } from 'zod';
 
+/** Coerce query string value to number, returning undefined if absent or empty. */
+const optionalQueryNumber = z
+  .union([z.string(), z.number()])
+  .optional()
+  .transform((v) => (v === undefined || v === '' ? undefined : Number(v)))
+  .pipe(z.number().nonnegative().optional());
+
+const optionalQueryInt = z
+  .union([z.string(), z.number()])
+  .optional()
+  .transform((v) => (v === undefined || v === '' ? undefined : Number(v)))
+  .pipe(z.number().int().nonnegative().optional());
+
 export const IndexCheckRequestSchema = z
   .object({
     url: z.string().url().optional(),
     domain: z.string().min(1).optional(),
+    keywordsTop100: optionalQueryInt,
+    traffic: optionalQueryNumber,
+    backlinks: optionalQueryInt,
+    domainAgeYears: optionalQueryNumber,
   })
   .refine((data) => data.url ?? data.domain, {
     message: 'Either url or domain must be provided',

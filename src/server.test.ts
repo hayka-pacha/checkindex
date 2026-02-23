@@ -47,6 +47,49 @@ describe('GET /check', () => {
     expect(body.error).toBe('Invalid request');
   });
 
+  it('passes signal query params to checkIndex and returns heuristic result', async () => {
+    const { checkIndex } = await import('./checkers/index.js');
+    const res = await app.request(
+      '/check?domain=signals-test.com&keywordsTop100=50&traffic=200&backlinks=10',
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { indexed: boolean; method: string; signals: unknown };
+    expect(body.indexed).toBe(true);
+    expect(body.method).toBe('heuristic');
+    expect(body.signals).toBeDefined();
+    expect(vi.mocked(checkIndex)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signals: expect.objectContaining({
+          keywordsTop100: 50,
+          traffic: 200,
+          backlinks: 10,
+        }),
+      }),
+    );
+  });
+
+  it('calls checkIndex without signals when none provided', async () => {
+    const { checkIndex } = await import('./checkers/index.js');
+    await app.request('/check?domain=nosignals.com');
+    expect(vi.mocked(checkIndex)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'nosignals.com',
+      }),
+    );
+    const call = vi.mocked(checkIndex).mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(call?.['signals']).toBeUndefined();
+  });
+
+  it('normalizes www domain param by stripping www prefix', async () => {
+    const { checkIndex } = await import('./checkers/index.js');
+    await app.request('/check?domain=www.normalize-test.com');
+    expect(vi.mocked(checkIndex)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'normalize-test.com',
+      }),
+    );
+  });
+
   it('returns cached result on second request', async () => {
     const { checkIndex } = await import('./checkers/index.js');
     await app.request('/check?domain=cached-domain.com');
