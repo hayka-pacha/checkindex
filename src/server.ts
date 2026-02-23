@@ -8,6 +8,7 @@ import { RateLimiter } from './rate-limiter.js';
 import { rateLimitMiddleware } from './rate-limit-middleware.js';
 import { IndexCheckRequestSchema } from './types.js';
 import { dashboardHtml } from './dashboard.js';
+import { createBulkJob, getJob, exportJobCSV, MAX_FILE_SIZE } from './bulk-job.js';
 import type { HeuristicSignals } from './types.js';
 
 const cache = createCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
@@ -183,4 +184,80 @@ app.post('/check/batch', async (c) => {
   );
 
   return c.json({ results: Object.fromEntries(results) });
+});
+
+/**
+ * Bulk CSV upload — accepts CSV text body, returns a job ID for async tracking.
+ * POST /bulk/upload  (Content-Type: text/csv)
+ */
+app.post('/bulk/upload', async (c) => {
+  const contentType = c.req.header('content-type') ?? '';
+  if (!contentType.includes('text/csv') && !contentType.includes('text/plain')) {
+    return c.json({ error: 'Content-Type must be text/csv or text/plain' }, 400);
+  }
+
+  const body = await c.req.text();
+  if (body.length > MAX_FILE_SIZE) {
+    return c.json({ error: `File too large (max ${String(MAX_FILE_SIZE / 1024 / 1024)}MB)` }, 400);
+  }
+
+  const result = createBulkJob(body);
+  if (typeof result === 'string') {
+    return c.json({ error: result }, 400);
+  }
+
+  return c.json({ jobId: result.id, status: result.status, total: result.total }, 202);
+});
+
+/** Get bulk job status and progress. */
+app.get('/bulk/jobs/:id', (c) => {
+  const job = getJob(c.req.param('id'));
+  if (!job) {
+    return c.json({ error: 'Job not found' }, 404);
+  }
+
+  return c.json({
+    id: job.id,
+    status: job.status,
+    total: job.total,
+    processed: job.processed,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt,
+  });
+});
+
+/** Get bulk job results as JSON. */
+app.get('/bulk/jobs/:id/results', (c) => {
+  const job = getJob(c.req.param('id'));
+  if (!job) {
+    return c.json({ error: 'Job not found' }, 404);
+  }
+
+  return c.json({
+    id: job.id,
+    status: job.status,
+    total: job.total,
+    processed: job.processed,
+    results: job.results,
+  });
+});
+
+/** Export bulk job results as CSV. */
+app.get('/bulk/jobs/:id/export', (c) => {
+  const job = getJob(c.req.param('id'));
+  if (!job) {
+    return c.json({ error: 'Job not found' }, 404);
+  }
+
+  if (job.status !== 'completed') {
+    return c.json({ error: 'Job not yet completed', status: job.status }, 409);
+  }
+
+  const csv = exportJobCSV(job);
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="checkindex-${job.id}.csv"`,
+    },
+  });
 });
