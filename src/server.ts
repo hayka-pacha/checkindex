@@ -3,7 +3,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { checkIndex } from './checkers/index.js';
 import { IndexCache } from './cache.js';
+import { normalizeDomain } from './domain.js';
 import { IndexCheckRequestSchema } from './types.js';
+import type { HeuristicSignals } from './types.js';
 
 const cache = new IndexCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
 
@@ -49,18 +51,35 @@ app.get('/check', async (c) => {
     );
   }
 
-  const { domain, url } = parsed.data;
+  const { domain, url, keywordsTop100, traffic, backlinks, domainAgeYears } = parsed.data;
 
   // Normalise to a bare domain for cache key and CSE queries
-  // Zod refine guarantees domain or url is defined, so url ?? '' is safe here
-  const targetDomain = domain ?? extractDomain(url ?? '');
+  const targetDomain = normalizeDomain(domain ?? url ?? '');
 
   const cached = cache.get(targetDomain);
   if (cached) {
     return c.json(cached);
   }
 
-  const result = await checkIndex({ domain: targetDomain });
+  // Build signals only if at least one signal field was provided
+  const hasSignals =
+    keywordsTop100 !== undefined ||
+    traffic !== undefined ||
+    backlinks !== undefined ||
+    domainAgeYears !== undefined;
+
+  const signals: HeuristicSignals | undefined = hasSignals
+    ? {
+        keywordsTop100: keywordsTop100 ?? 0,
+        traffic: traffic ?? 0,
+        backlinks: backlinks ?? 0,
+        ...(domainAgeYears !== undefined ? { domainAgeYears } : {}),
+      }
+    : undefined;
+
+  const result = await checkIndex(
+    signals ? { domain: targetDomain, signals } : { domain: targetDomain },
+  );
 
   cache.set(targetDomain, result);
 
@@ -101,22 +120,15 @@ app.post('/check/batch', async (c) => {
 
   const results = await Promise.all(
     domains.map(async (d) => {
-      const cached = cache.get(d);
-      if (cached) return [d, cached] as const;
+      const normalized = normalizeDomain(d);
+      const cached = cache.get(normalized);
+      if (cached) return [normalized, cached] as const;
 
-      const result = await checkIndex({ domain: d });
-      cache.set(d, result);
-      return [d, result] as const;
+      const result = await checkIndex({ domain: normalized });
+      cache.set(normalized, result);
+      return [normalized, result] as const;
     }),
   );
 
   return c.json({ results: Object.fromEntries(results) });
 });
-
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
-}
