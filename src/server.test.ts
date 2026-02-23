@@ -21,6 +21,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('GET / (dashboard)', () => {
+  it('serves the dashboard HTML', async () => {
+    const res = await app.request('/');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('checkindex');
+    expect(html).toContain('domain-input');
+  });
+});
+
 describe('GET /health', () => {
   it('returns status ok', async () => {
     const res = await app.request('/health');

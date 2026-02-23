@@ -7,6 +7,7 @@ import { normalizeDomain } from './domain.js';
 import { RateLimiter } from './rate-limiter.js';
 import { rateLimitMiddleware } from './rate-limit-middleware.js';
 import { IndexCheckRequestSchema } from './types.js';
+import { dashboardHtml } from './dashboard.js';
 import type { HeuristicSignals } from './types.js';
 
 const cache = createCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
@@ -50,6 +51,11 @@ function getClientKey(c: { req: { header: (name: string) => string | undefined }
   }
   return c.req.header('x-real-ip') ?? 'unknown';
 }
+
+/** Dashboard — serves the web UI at root URL. */
+app.get('/', (c) => {
+  return c.html(dashboardHtml);
+});
 
 /**
  * Health check endpoint.
