@@ -44,6 +44,14 @@ Server starts on `http://localhost:3000` (configurable via `PORT`).
 curl "http://localhost:3000/check?domain=example.com"
 ```
 
+### Single domain check with SEO signals (heuristic mode)
+
+```bash
+curl "http://localhost:3000/check?domain=example.com&keywordsTop100=42&traffic=1500&backlinks=10&domainAgeYears=3.5"
+```
+
+When signals are provided, the heuristic engine runs first (free). If confidence is high/medium, no Google CSE call is made.
+
 ### Single URL check
 
 ```bash

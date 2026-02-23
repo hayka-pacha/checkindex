@@ -132,4 +132,28 @@ describe('POST /check/batch', () => {
     expect(res.status).toBe(200);
     expect(vi.mocked(checkIndex).mock.calls.length).toBeLessThanOrEqual(50);
   });
+
+  it('normalizes www-prefixed domains in batch result keys', async () => {
+    const res = await app.request('/check/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domains: ['www.batch-norm.com'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { results: Record<string, unknown> };
+    expect(body.results['batch-norm.com']).toBeDefined();
+    expect(body.results['www.batch-norm.com']).toBeUndefined();
+  });
+});
+
+describe('Edge cases', () => {
+  it('returns 400 for /check with empty domain param', async () => {
+    const res = await app.request('/check?domain=');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for /check with invalid url param', async () => {
+    const res = await app.request('/check?url=not-a-url');
+    expect(res.status).toBe(400);
+  });
 });

@@ -45,4 +45,11 @@ describe('normalizeDomain', () => {
   it('only strips www prefix, not www in the middle', () => {
     expect(normalizeDomain('notwww.example.com')).toBe('notwww.example.com');
   });
+
+  it('is safe for concurrent calls (pure function, no shared state)', () => {
+    const inputs = ['www.A.COM', 'https://B.org/path', 'c.net', 'WWW.D.IO'];
+    const expected = ['a.com', 'b.org', 'c.net', 'd.io'];
+    const results = inputs.map(normalizeDomain);
+    expect(results).toEqual(expected);
+  });
 });

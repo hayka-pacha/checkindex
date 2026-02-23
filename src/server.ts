@@ -77,7 +77,9 @@ app.get('/check', async (c) => {
       }
     : undefined;
 
-  const result = await checkIndex({ domain: targetDomain, signals });
+  const result = await checkIndex(
+    signals ? { domain: targetDomain, signals } : { domain: targetDomain },
+  );
 
   cache.set(targetDomain, result);
 
