@@ -45,3 +45,11 @@ coverage/
 
 # OS
 .DS_Store
+
+# Claude Code (keep commands, ignore settings/auth)
+.claude/*
+!.claude/commands/
+
+# Specify (spec-driven dev)
+# Memory files are generated per-user, templates are tracked
+.specify/memory/
