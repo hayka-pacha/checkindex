@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Set high rate limit before server module loads (hoisted before imports)
+vi.hoisted(() => {
+  process.env['RATE_LIMIT_PER_MINUTE'] = '10000';
+});
+
 import { app } from './server.js';
 
 // Mock the checkIndex orchestrator so tests don't hit external APIs
@@ -143,6 +149,24 @@ describe('POST /check/batch', () => {
     const body = (await res.json()) as { results: Record<string, unknown> };
     expect(body.results['batch-norm.com']).toBeDefined();
     expect(body.results['www.batch-norm.com']).toBeUndefined();
+  });
+});
+
+describe('Rate limiting', () => {
+  it('includes rate limit headers on successful response', async () => {
+    const res = await app.request('/check?domain=ratelimit-header-test.com', {
+      headers: { 'X-Forwarded-For': '10.0.0.99' },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-RateLimit-Limit')).toBeDefined();
+    expect(res.headers.get('X-RateLimit-Remaining')).toBeDefined();
+    expect(res.headers.get('X-RateLimit-Reset')).toBeDefined();
+  });
+
+  it('does not rate limit /health endpoint', async () => {
+    const res = await app.request('/health');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-RateLimit-Limit')).toBeNull();
   });
 });
 

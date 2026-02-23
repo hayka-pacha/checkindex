@@ -4,18 +4,52 @@ import { logger } from 'hono/logger';
 import { checkIndex } from './checkers/index.js';
 import { IndexCache } from './cache.js';
 import { normalizeDomain } from './domain.js';
+import { RateLimiter } from './rate-limiter.js';
+import { rateLimitMiddleware } from './rate-limit-middleware.js';
 import { IndexCheckRequestSchema } from './types.js';
 import type { HeuristicSignals } from './types.js';
 
 const cache = new IndexCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
 
+const rateLimiter = new RateLimiter({
+  maxRequests: parseInt(process.env['RATE_LIMIT_PER_MINUTE'] ?? '60', 10),
+  windowMs: 60_000,
+});
+
 // Evict expired cache entries every hour
 setInterval(() => cache.evictExpired(), 3_600_000).unref();
+// Evict stale rate limit entries every 5 minutes
+setInterval(() => rateLimiter.evictExpired(), 300_000).unref();
 
 export const app = new Hono();
 
 app.use('*', cors());
 app.use('*', logger());
+app.use('*', rateLimitMiddleware(rateLimiter, { excludePaths: ['/health'] }));
+
+/**
+ * Pre-flight rate limit check for batch endpoint.
+ * Consumes additional tokens proportional to batch size minus 1 (first token consumed by middleware).
+ */
+function consumeBatchTokens(
+  clientKey: string,
+  domainCount: number,
+): ReturnType<RateLimiter['consume']> {
+  // Middleware already consumed 1 token; consume the remaining (domainCount - 1)
+  if (domainCount <= 1) {
+    return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
+  }
+  return rateLimiter.consume(clientKey, domainCount - 1);
+}
+
+/** Extract client IP for rate limiting — matches middleware keyFn logic. */
+function getClientKey(c: { req: { header: (name: string) => string | undefined } }): string {
+  const forwarded = c.req.header('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim() ?? 'unknown';
+  }
+  return c.req.header('x-real-ip') ?? 'unknown';
+}
 
 /**
  * Health check endpoint.
@@ -116,6 +150,17 @@ app.post('/check/batch', async (c) => {
 
   if (domains.length === 0) {
     return c.json({ error: 'No valid domains provided' }, 400);
+  }
+
+  // Consume additional rate limit tokens for batch (1 already consumed by middleware)
+  const batchRateCheck = consumeBatchTokens(getClientKey(c), domains.length);
+  if (!batchRateCheck.allowed) {
+    c.header('X-RateLimit-Remaining', String(batchRateCheck.remaining));
+    c.header(
+      'Retry-After',
+      String(Math.max(Math.ceil((batchRateCheck.resetAt - Date.now()) / 1000), 1)),
+    );
+    return c.json({ error: 'Too many requests' }, 429);
   }
 
   const results = await Promise.all(
