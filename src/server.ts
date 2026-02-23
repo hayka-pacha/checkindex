@@ -9,6 +9,13 @@ import { rateLimitMiddleware } from './rate-limit-middleware.js';
 import { IndexCheckRequestSchema } from './types.js';
 import { dashboardHtml } from './dashboard.js';
 import { createBulkJob, getJob, exportJobCSV, MAX_FILE_SIZE } from './bulk-job.js';
+import {
+  registerWebhook,
+  listWebhooks,
+  getWebhook,
+  updateWebhook,
+  deleteWebhook,
+} from './webhooks.js';
 import type { HeuristicSignals } from './types.js';
 
 const cache = createCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
@@ -260,4 +267,75 @@ app.get('/bulk/jobs/:id/export', (c) => {
       'Content-Disposition': `attachment; filename="checkindex-${job.id}.csv"`,
     },
   });
+});
+
+// --- Webhook endpoints ---
+
+/** Register a new webhook. */
+app.post('/webhooks', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { url, secret } = body as { url?: string; secret?: string };
+  if (!url || typeof url !== 'string') {
+    return c.json({ error: 'url is required' }, 400);
+  }
+
+  const result = registerWebhook(url, typeof secret === 'string' ? secret : undefined);
+  if (typeof result === 'string') {
+    return c.json({ error: result }, 400);
+  }
+
+  return c.json(result, 201);
+});
+
+/** List all webhooks. */
+app.get('/webhooks', (c) => {
+  const hooks = listWebhooks().map((wh) => ({
+    id: wh.id,
+    url: wh.url,
+    status: wh.status,
+    createdAt: wh.createdAt,
+  }));
+  return c.json({ webhooks: hooks });
+});
+
+/** Get a webhook by ID. */
+app.get('/webhooks/:id', (c) => {
+  const wh = getWebhook(c.req.param('id'));
+  if (!wh) return c.json({ error: 'Webhook not found' }, 404);
+  return c.json({ id: wh.id, url: wh.url, status: wh.status, createdAt: wh.createdAt });
+});
+
+/** Update a webhook. */
+app.patch('/webhooks/:id', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { url, secret } = body as { url?: string; secret?: string };
+  const result = updateWebhook(c.req.param('id'), {
+    ...(typeof url === 'string' ? { url } : {}),
+    ...(typeof secret === 'string' ? { secret } : {}),
+  });
+
+  if (typeof result === 'string') {
+    return c.json({ error: result }, result === 'Webhook not found' ? 404 : 400);
+  }
+
+  return c.json({ id: result.id, url: result.url, status: result.status });
+});
+
+/** Delete a webhook. */
+app.delete('/webhooks/:id', (c) => {
+  const deleted = deleteWebhook(c.req.param('id'));
+  if (!deleted) return c.json({ error: 'Webhook not found' }, 404);
+  return c.json({ deleted: true });
 });
