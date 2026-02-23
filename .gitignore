@@ -51,5 +51,6 @@ coverage/
 !.claude/commands/
 
 # Specify (spec-driven dev)
-# Memory files are generated per-user, templates are tracked
-.specify/memory/
+# Specs are per-feature, tracked in their own branches
+# Constitution is always tracked
+.specify/specs/
