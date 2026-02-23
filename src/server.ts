@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { checkIndex } from './checkers/index.js';
-import { IndexCache } from './cache.js';
+import { createCache } from './cache-factory.js';
 import { normalizeDomain } from './domain.js';
 import { RateLimiter } from './rate-limiter.js';
 import { rateLimitMiddleware } from './rate-limit-middleware.js';
 import { IndexCheckRequestSchema } from './types.js';
 import type { HeuristicSignals } from './types.js';
 
-const cache = new IndexCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
+const cache = createCache(parseInt(process.env['CACHE_TTL_SECONDS'] ?? '604800', 10));
 
 const rateLimiter = new RateLimiter({
   maxRequests: parseInt(process.env['RATE_LIMIT_PER_MINUTE'] ?? '60', 10),
@@ -56,7 +56,8 @@ function getClientKey(c: { req: { header: (name: string) => string | undefined }
  * Returns server status and cache size.
  */
 app.get('/health', (c) => {
-  return c.json({ status: 'ok', cacheSize: cache.size() });
+  const stats = cache.stats?.() ?? { size: cache.size() };
+  return c.json({ status: 'ok', cacheSize: cache.size(), ...stats });
 });
 
 /**

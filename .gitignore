@@ -39,6 +39,9 @@ coverage/
 .cache/
 .turbo/
 .eslintcache
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 # TypeScript
 *.tsbuildinfo
